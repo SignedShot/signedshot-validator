@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use signedshot_validator::{parse_jwt, Sidecar};
+use signedshot_validator::{fetch_jwks, parse_jwt, verify_signature, Sidecar};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -18,7 +18,7 @@ enum Commands {
         /// Path to the sidecar JSON file
         sidecar: PathBuf,
     },
-    /// Validate a sidecar file (parse sidecar + decode JWT)
+    /// Validate a sidecar file (parse + decode + verify signature)
     Validate {
         /// Path to the sidecar JSON file
         sidecar: PathBuf,
@@ -65,27 +65,58 @@ fn validate_command(path: &Path) -> Result<()> {
         }
     };
 
-    match parse_jwt(sidecar.jwt()) {
-        Ok(parsed) => {
+    let parsed = match parse_jwt(sidecar.jwt()) {
+        Ok(p) => {
             println!("[OK] JWT decoded");
-            println!();
-            println!("Claims:");
-            println!("  Issuer:       {}", parsed.claims.iss);
-            println!("  Capture ID:   {}", parsed.claims.capture_id);
-            println!("  Publisher ID: {}", parsed.claims.publisher_id);
-            println!("  Device ID:    {}", parsed.claims.device_id);
-            println!("  Method:       {}", parsed.claims.method);
-            println!("  Issued At:    {}", parsed.claims.iat);
-            if let Some(kid) = &parsed.header.kid {
-                println!("  Key ID:       {}", kid);
-            }
-            println!();
-            println!("[OK] Validation complete (signature not verified)");
-            Ok(())
+            p
         }
         Err(e) => {
             println!("[FAILED] JWT decoding: {}", e);
-            Err(e).context("Failed to decode JWT")
+            return Err(e).context("Failed to decode JWT");
+        }
+    };
+
+    let kid = match &parsed.header.kid {
+        Some(k) => k.clone(),
+        None => {
+            println!("[FAILED] JWT missing kid in header");
+            return Err(anyhow::anyhow!("JWT missing kid in header"));
+        }
+    };
+
+    println!("[..] Fetching JWKS from {}", parsed.claims.iss);
+    let jwks = match fetch_jwks(&parsed.claims.iss) {
+        Ok(j) => {
+            println!("[OK] JWKS fetched ({} keys)", j.keys.len());
+            j
+        }
+        Err(e) => {
+            println!("[FAILED] JWKS fetch: {}", e);
+            return Err(e).context("Failed to fetch JWKS");
+        }
+    };
+
+    match verify_signature(sidecar.jwt(), &jwks, &kid) {
+        Ok(()) => {
+            println!("[OK] Signature verified");
+        }
+        Err(e) => {
+            println!("[FAILED] Signature verification: {}", e);
+            return Err(e).context("Signature verification failed");
         }
     }
+
+    println!();
+    println!("Claims:");
+    println!("  Issuer:       {}", parsed.claims.iss);
+    println!("  Capture ID:   {}", parsed.claims.capture_id);
+    println!("  Publisher ID: {}", parsed.claims.publisher_id);
+    println!("  Device ID:    {}", parsed.claims.device_id);
+    println!("  Method:       {}", parsed.claims.method);
+    println!("  Issued At:    {}", parsed.claims.iat);
+    println!("  Key ID:       {}", kid);
+    println!();
+    println!("[OK] Validation complete");
+
+    Ok(())
 }
