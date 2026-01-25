@@ -1,9 +1,24 @@
 //! JWT parsing for SignedShot capture trust tokens.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, ValidationError};
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Jwk {
+    pub kty: String,
+    pub crv: String,
+    pub x: String,
+    pub y: String,
+    pub kid: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Jwks {
+    pub keys: Vec<Jwk>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JwtHeader {
@@ -88,6 +103,57 @@ fn validate_claims(claims: &CaptureTrustClaims) -> Result<()> {
             claims.method, valid_methods
         )));
     }
+
+    Ok(())
+}
+
+pub fn fetch_jwks(issuer: &str) -> Result<Jwks> {
+    let url = format!("{}/.well-known/jwks.json", issuer.trim_end_matches('/'));
+
+    let response = reqwest::blocking::get(&url)
+        .map_err(|e| ValidationError::JwksFetchError(format!("HTTP request failed: {}", e)))?;
+
+    if !response.status().is_success() {
+        return Err(ValidationError::JwksFetchError(format!(
+            "HTTP {} from {}",
+            response.status(),
+            url
+        )));
+    }
+
+    response
+        .json::<Jwks>()
+        .map_err(|e| ValidationError::JwksFetchError(format!("Failed to parse JWKS: {}", e)))
+}
+
+pub fn verify_signature(token: &str, jwks: &Jwks, kid: &str) -> Result<()> {
+    let jwk = jwks
+        .keys
+        .iter()
+        .find(|k| k.kid == kid)
+        .ok_or_else(|| ValidationError::KeyNotFound(kid.to_string()))?;
+
+    let x_bytes = URL_SAFE_NO_PAD
+        .decode(&jwk.x)
+        .map_err(|e| ValidationError::SignatureError(format!("Invalid x coordinate: {}", e)))?;
+    let y_bytes = URL_SAFE_NO_PAD
+        .decode(&jwk.y)
+        .map_err(|e| ValidationError::SignatureError(format!("Invalid y coordinate: {}", e)))?;
+
+    let mut public_key = Vec::with_capacity(1 + x_bytes.len() + y_bytes.len());
+    public_key.push(0x04);
+    public_key.extend_from_slice(&x_bytes);
+    public_key.extend_from_slice(&y_bytes);
+
+    let decoding_key = DecodingKey::from_ec_der(&public_key);
+
+    let mut validation = Validation::new(Algorithm::ES256);
+    validation.set_audience(&["signedshot"]);
+    validation.validate_exp = false;
+    validation.set_required_spec_claims::<&str>(&[]);
+
+    decode::<CaptureTrustClaims>(token, &decoding_key, &validation)
+        .map_err(|e| ValidationError::SignatureError(format!("{}", e)))?;
 
     Ok(())
 }
