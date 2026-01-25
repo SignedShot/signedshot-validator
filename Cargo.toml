@@ -1,0 +1,9 @@
+[package]
+name = "signedshot-validator"
+version = "0.1.0"
+edition = "2021"
+description = "Validator for SignedShot media authenticity proofs"
+license = "MIT"
+repository = "https://github.com/SignedShot/signedshot-validator"
+
+[dependencies]
