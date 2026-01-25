@@ -58,7 +58,8 @@ impl Sidecar {
 mod tests {
     use super::*;
 
-    const VALID_JWT: &str = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature";
+    const VALID_JWT: &str =
+        "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature";
 
     #[test]
     fn parse_valid_sidecar() {
@@ -82,7 +83,10 @@ mod tests {
         );
 
         let result = Sidecar::from_json(&json);
-        assert!(matches!(result, Err(ValidationError::UnsupportedVersion(_))));
+        assert!(matches!(
+            result,
+            Err(ValidationError::UnsupportedVersion(_))
+        ));
     }
 
     #[test]
