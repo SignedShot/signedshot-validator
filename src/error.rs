@@ -15,6 +15,12 @@ pub enum ValidationError {
 
     #[error("Unsupported sidecar version: {0}")]
     UnsupportedVersion(String),
+
+    #[error("Invalid JWT: {0}")]
+    InvalidJwt(String),
+
+    #[error("Failed to decode JWT: {0}")]
+    JwtDecodeError(String),
 }
 
 pub type Result<T> = std::result::Result<T, ValidationError>;
