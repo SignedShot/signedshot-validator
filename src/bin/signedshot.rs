@@ -1,8 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use signedshot_validator::{
-    fetch_jwks, parse_jwt, verify_media_integrity, verify_signature, Sidecar,
-};
+use signedshot_validator::{parse_jwt, validate, Sidecar};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -27,6 +25,10 @@ enum Commands {
 
         /// Path to the media file for content hash verification
         media: PathBuf,
+
+        /// Output result as JSON
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -35,7 +37,11 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Parse { sidecar } => parse_command(&sidecar),
-        Commands::Validate { sidecar, media } => validate_command(&sidecar, &media),
+        Commands::Validate {
+            sidecar,
+            media,
+            json,
+        } => validate_command(&sidecar, &media, json),
     }
 }
 
@@ -63,11 +69,16 @@ fn parse_command(path: &Path) -> Result<()> {
     }
 }
 
-fn validate_command(path: &Path, media_path: &Path) -> Result<()> {
-    println!("Validating sidecar: {}", path.display());
+fn validate_command(sidecar_path: &Path, media_path: &Path, json_output: bool) -> Result<()> {
+    if json_output {
+        return validate_json(sidecar_path, media_path);
+    }
+
+    println!("Validating sidecar: {}", sidecar_path.display());
     println!("Media file: {}", media_path.display());
 
-    let sidecar = match Sidecar::from_file(path) {
+    // Parse sidecar first to show progress
+    let sidecar = match Sidecar::from_file(sidecar_path) {
         Ok(s) => {
             println!("[OK] Sidecar parsed");
             s
@@ -78,6 +89,7 @@ fn validate_command(path: &Path, media_path: &Path) -> Result<()> {
         }
     };
 
+    // Parse JWT to get claims for display
     let parsed = match parse_jwt(sidecar.jwt()) {
         Ok(p) => {
             println!("[OK] JWT decoded");
@@ -89,60 +101,57 @@ fn validate_command(path: &Path, media_path: &Path) -> Result<()> {
         }
     };
 
-    let kid = match &parsed.header.kid {
-        Some(k) => k.clone(),
-        None => {
-            println!("[FAILED] JWT missing kid in header");
-            return Err(anyhow::anyhow!("JWT missing kid in header"));
-        }
-    };
-
+    let kid = parsed
+        .header
+        .kid
+        .clone()
+        .unwrap_or_else(|| "N/A".to_string());
     println!("[..] Fetching JWKS from {}", parsed.claims.iss);
-    let jwks = match fetch_jwks(&parsed.claims.iss) {
-        Ok(j) => {
-            println!("[OK] JWKS fetched ({} keys)", j.keys.len());
-            j
-        }
+
+    // Run full validation
+    let result = match validate(sidecar_path, media_path) {
+        Ok(r) => r,
         Err(e) => {
-            println!("[FAILED] JWKS fetch: {}", e);
-            return Err(e).context("Failed to fetch JWKS");
+            println!("[FAILED] Validation error: {}", e);
+            return Err(e).context("Validation failed");
         }
     };
 
-    match verify_signature(sidecar.jwt(), &jwks, &kid) {
-        Ok(()) => {
-            println!("[OK] JWT signature verified");
-        }
-        Err(e) => {
-            println!("[FAILED] JWT signature verification: {}", e);
-            return Err(e).context("JWT signature verification failed");
-        }
+    // Display results
+    if result.capture_trust.signature_valid {
+        println!("[OK] JWT signature verified");
+    } else {
+        println!("[FAILED] JWT signature verification");
     }
 
-    // Verify media integrity
-    println!("[..] Verifying media integrity");
+    if result.media_integrity.content_hash_valid {
+        println!("[OK] Content hash verified");
+    } else {
+        println!("[FAILED] Content hash mismatch");
+    }
+
+    if result.media_integrity.signature_valid {
+        println!("[OK] Media signature verified");
+    } else {
+        println!("[FAILED] Media signature verification");
+    }
+
+    if result.media_integrity.capture_id_match {
+        println!("[OK] Capture ID match verified");
+    } else {
+        println!("[FAILED] Capture ID mismatch");
+    }
+
     let integrity = sidecar.media_integrity();
-
-    match verify_media_integrity(integrity, media_path, Some(&parsed.claims.capture_id)) {
-        Ok(()) => {
-            println!("[OK] Content hash verified");
-            println!("[OK] Media signature verified");
-            println!("[OK] Capture ID match verified");
-        }
-        Err(e) => {
-            println!("[FAILED] Media integrity: {}", e);
-            return Err(e).context("Media integrity verification failed");
-        }
-    }
 
     println!();
     println!("Claims:");
-    println!("  Issuer:       {}", parsed.claims.iss);
-    println!("  Capture ID:   {}", parsed.claims.capture_id);
-    println!("  Publisher ID: {}", parsed.claims.publisher_id);
-    println!("  Device ID:    {}", parsed.claims.device_id);
-    println!("  Method:       {}", parsed.claims.method);
-    println!("  Issued At:    {}", parsed.claims.iat);
+    println!("  Issuer:       {}", result.capture_trust.issuer);
+    println!("  Capture ID:   {}", result.capture_trust.capture_id);
+    println!("  Publisher ID: {}", result.capture_trust.publisher_id);
+    println!("  Device ID:    {}", result.capture_trust.device_id);
+    println!("  Method:       {}", result.capture_trust.method);
+    println!("  Issued At:    {}", result.capture_trust.issued_at);
     println!("  Key ID:       {}", kid);
 
     println!();
@@ -150,10 +159,34 @@ fn validate_command(path: &Path, media_path: &Path) -> Result<()> {
     println!("  Content Hash: {}", integrity.content_hash);
     println!("  Capture ID:   {}", integrity.capture_id);
     println!("  Captured At:  {}", integrity.captured_at);
-    println!("  Public Key:   {}...", &integrity.public_key[..40]);
+    println!(
+        "  Public Key:   {}...",
+        &integrity.public_key[..40.min(integrity.public_key.len())]
+    );
 
     println!();
-    println!("[OK] Validation complete");
+    if result.valid {
+        println!("[OK] Validation complete");
+        Ok(())
+    } else {
+        println!(
+            "[FAILED] Validation failed: {}",
+            result.error.unwrap_or_default()
+        );
+        Err(anyhow::anyhow!("Validation failed"))
+    }
+}
 
-    Ok(())
+fn validate_json(sidecar_path: &Path, media_path: &Path) -> Result<()> {
+    let result = validate(sidecar_path, media_path).context("Validation failed")?;
+
+    let json = serde_json::to_string_pretty(&result).context("Failed to serialize result")?;
+
+    println!("{}", json);
+
+    if result.valid {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("Validation failed"))
+    }
 }
