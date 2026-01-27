@@ -21,12 +21,28 @@
 //!     println!("Invalid: {}", result.error.unwrap_or_default());
 //! }
 //! ```
+//!
+//! # Python Bindings
+//!
+//! This library can be built as a Python module using PyO3.
+//! Build with: `maturin build --features python`
+//!
+//! ```python
+//! import signedshot_validator
+//!
+//! result = signedshot_validator.validate_files("photo.sidecar.json", "photo.jpg")
+//! if result.valid:
+//!     print(f"Publisher: {result.capture_trust['publisher_id']}")
+//! ```
 
 pub mod error;
 pub mod integrity;
 pub mod jwt;
 pub mod sidecar;
 pub mod validate;
+
+#[cfg(feature = "python")]
+mod python;
 
 pub use error::{Result, ValidationError};
 pub use integrity::{
