@@ -6,6 +6,10 @@ description = "Validator for SignedShot media authenticity proofs"
 license = "MIT"
 repository = "https://github.com/SignedShot/signedshot-validator"
 
+[lib]
+name = "signedshot_validator"
+crate-type = ["cdylib", "rlib"]
+
 [[bin]]
 name = "signedshot"
 path = "src/bin/signedshot.rs"
@@ -17,6 +21,7 @@ clap = { version = "4", features = ["derive"] }
 hex = "0.4"
 jsonwebtoken = "9"
 p256 = { version = "0.13", features = ["ecdsa"] }
+pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
 reqwest = { version = "0.12", features = ["blocking", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -25,3 +30,7 @@ thiserror = "1"
 
 [dev-dependencies]
 tempfile = "3"
+
+[features]
+default = []
+python = ["pyo3"]
