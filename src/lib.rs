@@ -28,9 +28,9 @@
 //! Build with: `maturin build --features python`
 //!
 //! ```python
-//! import signedshot_validator
+//! import signedshot
 //!
-//! result = signedshot_validator.validate_files("photo.sidecar.json", "photo.jpg")
+//! result = signedshot.validate_files("photo.sidecar.json", "photo.jpg")
 //! if result.valid:
 //!     print(f"Publisher: {result.capture_trust['publisher_id']}")
 //! ```

@@ -1,4 +1,4 @@
-"""Type stubs for signedshot_validator."""
+"""Type stubs for signedshot."""
 
 from typing import Optional, Dict, Any
 
