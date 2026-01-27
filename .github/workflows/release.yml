@@ -116,10 +116,9 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Publish to PyPI
-        uses: PyO3/maturin-action@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          command: upload
-          args: --non-interactive --skip-existing dist/*
+          skip-existing: true
 
   # Publish to TestPyPI (on main branch push)
   publish-test:
@@ -139,7 +138,7 @@ jobs:
           path: dist
           merge-multiple: true
       - name: Publish to TestPyPI
-        uses: PyO3/maturin-action@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          command: upload
-          args: --non-interactive --skip-existing --repository testpypi dist/*
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
