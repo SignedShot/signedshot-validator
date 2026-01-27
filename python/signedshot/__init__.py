@@ -1,5 +1,5 @@
 # Re-export from the native module
-from signedshot_validator.signedshot_validator import (
+from signedshot.signedshot import (
     ValidationResult,
     validate,
     validate_files,

@@ -130,14 +130,14 @@ impl From<RustValidationResult> for PyValidationResult {
 ///
 /// Example:
 ///     ```python
-///     import signedshot_validator
+///     import signedshot
 ///
 ///     with open("photo.sidecar.json") as f:
 ///         sidecar_json = f.read()
 ///     with open("photo.jpg", "rb") as f:
 ///         media_bytes = f.read()
 ///
-///     result = signedshot_validator.validate(sidecar_json, media_bytes)
+///     result = signedshot.validate(sidecar_json, media_bytes)
 ///     if result.valid:
 ///         print(f"Valid! Publisher: {result.capture_trust['publisher_id']}")
 ///     else:
@@ -165,9 +165,9 @@ fn validate(sidecar_json: &str, media_bytes: &[u8]) -> PyResult<PyValidationResu
 ///
 /// Example:
 ///     ```python
-///     import signedshot_validator
+///     import signedshot
 ///
-///     result = signedshot_validator.validate_files("photo.sidecar.json", "photo.jpg")
+///     result = signedshot.validate_files("photo.sidecar.json", "photo.jpg")
 ///     print(result)
 ///     ```
 #[pyfunction]
@@ -204,20 +204,20 @@ fn validate_files(sidecar_path: &str, media_path: &str) -> PyResult<PyValidation
 ///
 /// Example:
 ///     ```python
-///     import signedshot_validator
+///     import signedshot
 ///
 ///     # From file paths
-///     result = signedshot_validator.validate_files("photo.sidecar.json", "photo.jpg")
+///     result = signedshot.validate_files("photo.sidecar.json", "photo.jpg")
 ///
 ///     # From content
-///     result = signedshot_validator.validate(sidecar_json, media_bytes)
+///     result = signedshot.validate(sidecar_json, media_bytes)
 ///
 ///     if result.valid:
 ///         print(f"Publisher: {result.capture_trust['publisher_id']}")
 ///         print(f"Method: {result.capture_trust['method']}")
 ///     ```
 #[pymodule]
-fn signedshot_validator(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn signedshot(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyValidationResult>()?;
     m.add_function(wrap_pyfunction!(validate, m)?)?;
     m.add_function(wrap_pyfunction!(validate_files, m)?)?;

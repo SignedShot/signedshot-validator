@@ -126,7 +126,7 @@ jobs:
     needs: [linux-x86_64, linux-aarch64, macos, windows, sdist]
     environment:
       name: pypi
-      url: https://pypi.org/p/signedshot-validator
+      url: https://pypi.org/p/signedshot
     permissions:
       id-token: write  # Required for trusted publishing
     steps:
@@ -148,7 +148,7 @@ jobs:
     needs: [linux-x86_64, linux-aarch64, macos, windows, sdist]
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/signedshot-validator
+      url: https://test.pypi.org/p/signedshot
     permissions:
       id-token: write  # Required for trusted publishing
     steps:
