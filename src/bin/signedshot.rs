@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use signedshot_validator::{fetch_jwks, parse_jwt, verify_signature, Sidecar};
+use signedshot_validator::{
+    fetch_jwks, parse_jwt, verify_media_integrity, verify_signature, Sidecar,
+};
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -18,10 +20,13 @@ enum Commands {
         /// Path to the sidecar JSON file
         sidecar: PathBuf,
     },
-    /// Validate a sidecar file (parse + decode + verify signature)
+    /// Validate a sidecar file (parse + decode + verify signature + verify media integrity)
     Validate {
         /// Path to the sidecar JSON file
         sidecar: PathBuf,
+
+        /// Path to the media file for content hash verification
+        media: PathBuf,
     },
 }
 
@@ -30,7 +35,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Parse { sidecar } => parse_command(&sidecar),
-        Commands::Validate { sidecar } => validate_command(&sidecar),
+        Commands::Validate { sidecar, media } => validate_command(&sidecar, &media),
     }
 }
 
@@ -42,6 +47,13 @@ fn parse_command(path: &Path) -> Result<()> {
             println!("[OK] Sidecar parsed successfully");
             println!("  Version: {}", sidecar.version);
             println!("  JWT length: {} chars", sidecar.jwt().len());
+
+            let integrity = sidecar.media_integrity();
+            println!("  Media Integrity:");
+            println!("    Content Hash: {}...", &integrity.content_hash[..16]);
+            println!("    Capture ID: {}", integrity.capture_id);
+            println!("    Captured At: {}", integrity.captured_at);
+
             Ok(())
         }
         Err(e) => {
@@ -51,8 +63,9 @@ fn parse_command(path: &Path) -> Result<()> {
     }
 }
 
-fn validate_command(path: &Path) -> Result<()> {
+fn validate_command(path: &Path, media_path: &Path) -> Result<()> {
     println!("Validating sidecar: {}", path.display());
+    println!("Media file: {}", media_path.display());
 
     let sidecar = match Sidecar::from_file(path) {
         Ok(s) => {
@@ -98,11 +111,27 @@ fn validate_command(path: &Path) -> Result<()> {
 
     match verify_signature(sidecar.jwt(), &jwks, &kid) {
         Ok(()) => {
-            println!("[OK] Signature verified");
+            println!("[OK] JWT signature verified");
         }
         Err(e) => {
-            println!("[FAILED] Signature verification: {}", e);
-            return Err(e).context("Signature verification failed");
+            println!("[FAILED] JWT signature verification: {}", e);
+            return Err(e).context("JWT signature verification failed");
+        }
+    }
+
+    // Verify media integrity
+    println!("[..] Verifying media integrity");
+    let integrity = sidecar.media_integrity();
+
+    match verify_media_integrity(integrity, media_path, Some(&parsed.claims.capture_id)) {
+        Ok(()) => {
+            println!("[OK] Content hash verified");
+            println!("[OK] Media signature verified");
+            println!("[OK] Capture ID match verified");
+        }
+        Err(e) => {
+            println!("[FAILED] Media integrity: {}", e);
+            return Err(e).context("Media integrity verification failed");
         }
     }
 
@@ -115,6 +144,14 @@ fn validate_command(path: &Path) -> Result<()> {
     println!("  Method:       {}", parsed.claims.method);
     println!("  Issued At:    {}", parsed.claims.iat);
     println!("  Key ID:       {}", kid);
+
+    println!();
+    println!("Media Integrity:");
+    println!("  Content Hash: {}", integrity.content_hash);
+    println!("  Capture ID:   {}", integrity.capture_id);
+    println!("  Captured At:  {}", integrity.captured_at);
+    println!("  Public Key:   {}...", &integrity.public_key[..40]);
+
     println!();
     println!("[OK] Validation complete");
 
