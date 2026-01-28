@@ -126,6 +126,14 @@ pub fn fetch_jwks(issuer: &str) -> Result<Jwks> {
         .map_err(|e| ValidationError::JwksFetchError(format!("Failed to parse JWKS: {}", e)))
 }
 
+/// Parse JWKS from a JSON string.
+///
+/// Useful when the JWKS is already available locally (e.g., from the API's own keys).
+pub fn parse_jwks_json(jwks_json: &str) -> Result<Jwks> {
+    serde_json::from_str(jwks_json)
+        .map_err(|e| ValidationError::JwksFetchError(format!("Failed to parse JWKS JSON: {}", e)))
+}
+
 pub fn verify_signature(token: &str, jwks: &Jwks, kid: &str) -> Result<()> {
     let jwk = jwks
         .keys
