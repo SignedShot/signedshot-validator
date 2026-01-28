@@ -82,6 +82,33 @@ def validate(sidecar_json: str, media_bytes: bytes) -> ValidationResult:
     """
     ...
 
+def validate_with_jwks(
+    sidecar_json: str, media_bytes: bytes, jwks_json: str
+) -> ValidationResult:
+    """Validate a SignedShot sidecar against media content using pre-loaded JWKS.
+
+    Use this when you already have the JWKS available locally, avoiding HTTP fetch.
+    This is useful for API services that want to validate using their own keys.
+
+    Args:
+        sidecar_json: The sidecar JSON as a string
+        media_bytes: The media file content as bytes
+        jwks_json: The JWKS JSON as a string (from /.well-known/jwks.json)
+
+    Returns:
+        ValidationResult with detailed information about the validation
+
+    Raises:
+        ValueError: If the sidecar or JWKS cannot be parsed
+
+    Example:
+        >>> jwks_json = '{"keys": [...]}'
+        >>> result = validate_with_jwks(sidecar_json, media_bytes, jwks_json)
+        >>> if result.valid:
+        ...     print(f"Publisher: {result.capture_trust['publisher_id']}")
+    """
+    ...
+
 def validate_files(sidecar_path: str, media_path: str) -> ValidationResult:
     """Validate a SignedShot sidecar from file paths.
 
