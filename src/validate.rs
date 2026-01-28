@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::error::{Result, ValidationError};
 use crate::integrity::{verify_capture_id_match, verify_signature as verify_media_signature};
 use crate::jwt::{
-    fetch_jwks, parse_jwt, parse_jwks_json, verify_signature as verify_jwt_signature,
+    fetch_jwks, parse_jwks_json, parse_jwt, verify_signature as verify_jwt_signature,
     CaptureTrustClaims, Jwks,
 };
 use crate::sidecar::Sidecar;
