@@ -9,7 +9,8 @@ use std::path::Path;
 use crate::error::{Result, ValidationError};
 use crate::integrity::{verify_capture_id_match, verify_signature as verify_media_signature};
 use crate::jwt::{
-    fetch_jwks, parse_jwt, verify_signature as verify_jwt_signature, CaptureTrustClaims,
+    fetch_jwks, parse_jwks_json, parse_jwt, verify_signature as verify_jwt_signature,
+    CaptureTrustClaims, Jwks,
 };
 use crate::sidecar::Sidecar;
 
@@ -105,7 +106,20 @@ pub fn validate(sidecar_path: &Path, media_path: &Path) -> Result<ValidationResu
 ///
 /// Useful when you have the content in memory rather than files.
 pub fn validate_from_bytes(sidecar_json: &str, media_bytes: &[u8]) -> Result<ValidationResult> {
-    validate_bytes_impl(sidecar_json, media_bytes)
+    validate_bytes_impl(sidecar_json, media_bytes, None)
+}
+
+/// Validate from sidecar JSON string and media bytes with pre-loaded JWKS.
+///
+/// Use this when you already have the JWKS available locally, avoiding HTTP fetch.
+/// This is useful for the API service that wants to validate using its own keys.
+pub fn validate_from_bytes_with_jwks(
+    sidecar_json: &str,
+    media_bytes: &[u8],
+    jwks_json: &str,
+) -> Result<ValidationResult> {
+    let jwks = parse_jwks_json(jwks_json)?;
+    validate_bytes_impl(sidecar_json, media_bytes, Some(jwks))
 }
 
 fn validate_impl(sidecar_path: &Path, media_path: &Path) -> Result<ValidationResult> {
@@ -115,17 +129,25 @@ fn validate_impl(sidecar_path: &Path, media_path: &Path) -> Result<ValidationRes
     // Read media file for hash verification
     let media_bytes = std::fs::read(media_path)?;
 
-    validate_sidecar_and_media(&sidecar, &media_bytes)
+    validate_sidecar_and_media(&sidecar, &media_bytes, None)
 }
 
-fn validate_bytes_impl(sidecar_json: &str, media_bytes: &[u8]) -> Result<ValidationResult> {
+fn validate_bytes_impl(
+    sidecar_json: &str,
+    media_bytes: &[u8],
+    jwks: Option<Jwks>,
+) -> Result<ValidationResult> {
     // Parse sidecar
     let sidecar = Sidecar::from_json(sidecar_json)?;
 
-    validate_sidecar_and_media(&sidecar, media_bytes)
+    validate_sidecar_and_media(&sidecar, media_bytes, jwks)
 }
 
-fn validate_sidecar_and_media(sidecar: &Sidecar, media_bytes: &[u8]) -> Result<ValidationResult> {
+fn validate_sidecar_and_media(
+    sidecar: &Sidecar,
+    media_bytes: &[u8],
+    jwks: Option<Jwks>,
+) -> Result<ValidationResult> {
     let integrity = sidecar.media_integrity();
 
     // Parse JWT (without signature verification yet)
@@ -139,8 +161,8 @@ fn validate_sidecar_and_media(sidecar: &Sidecar, media_bytes: &[u8]) -> Result<V
     let mut capture_id_match = false;
     let mut error_message: Option<String> = None;
 
-    // Fetch JWKS and verify JWT signature
-    match fetch_and_verify_jwt(sidecar.jwt(), &parsed.claims.iss, kid.as_deref()) {
+    // Verify JWT signature (using provided JWKS or fetching from issuer)
+    match verify_jwt_with_jwks(sidecar.jwt(), &parsed.claims.iss, kid.as_deref(), jwks) {
         Ok(()) => jwt_signature_valid = true,
         Err(e) => {
             error_message = Some(format!("JWT verification failed: {}", e));
@@ -198,11 +220,22 @@ fn validate_sidecar_and_media(sidecar: &Sidecar, media_bytes: &[u8]) -> Result<V
     })
 }
 
-fn fetch_and_verify_jwt(token: &str, issuer: &str, kid: Option<&str>) -> Result<()> {
+/// Verify JWT signature using provided JWKS or by fetching from issuer.
+fn verify_jwt_with_jwks(
+    token: &str,
+    issuer: &str,
+    kid: Option<&str>,
+    jwks: Option<Jwks>,
+) -> Result<()> {
     let kid =
         kid.ok_or_else(|| ValidationError::InvalidJwt("JWT missing kid in header".to_string()))?;
 
-    let jwks = fetch_jwks(issuer)?;
+    // Use provided JWKS or fetch from issuer
+    let jwks = match jwks {
+        Some(jwks) => jwks,
+        None => fetch_jwks(issuer)?,
+    };
+
     verify_jwt_signature(token, &jwks, kid)?;
 
     Ok(())

@@ -6,7 +6,9 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-use crate::validate::{validate_from_bytes, ValidationResult as RustValidationResult};
+use crate::validate::{
+    validate_from_bytes, validate_from_bytes_with_jwks, ValidationResult as RustValidationResult,
+};
 
 /// Python-accessible validation result
 #[pyclass(name = "ValidationResult")]
@@ -150,6 +152,51 @@ fn validate(sidecar_json: &str, media_bytes: &[u8]) -> PyResult<PyValidationResu
         .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
 }
 
+/// Validate a SignedShot sidecar against media content using pre-loaded JWKS.
+///
+/// Use this when you already have the JWKS available locally, avoiding HTTP fetch.
+/// This is useful for API services that want to validate using their own keys.
+///
+/// Args:
+///     sidecar_json: The sidecar JSON as a string
+///     media_bytes: The media file content as bytes
+///     jwks_json: The JWKS JSON as a string (from /.well-known/jwks.json)
+///
+/// Returns:
+///     ValidationResult: The validation result with detailed information
+///
+/// Raises:
+///     ValueError: If the sidecar or JWKS cannot be parsed
+///
+/// Example:
+///     ```python
+///     import signedshot
+///
+///     # Get JWKS from your service's keys
+///     jwks_json = '{"keys": [...]}'
+///
+///     with open("photo.sidecar.json") as f:
+///         sidecar_json = f.read()
+///     with open("photo.jpg", "rb") as f:
+///         media_bytes = f.read()
+///
+///     result = signedshot.validate_with_jwks(sidecar_json, media_bytes, jwks_json)
+///     if result.valid:
+///         print(f"Valid! Publisher: {result.capture_trust['publisher_id']}")
+///     else:
+///         print(f"Invalid: {result.error}")
+///     ```
+#[pyfunction]
+fn validate_with_jwks(
+    sidecar_json: &str,
+    media_bytes: &[u8],
+    jwks_json: &str,
+) -> PyResult<PyValidationResult> {
+    validate_from_bytes_with_jwks(sidecar_json, media_bytes, jwks_json)
+        .map(PyValidationResult::from)
+        .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))
+}
+
 /// Validate a SignedShot sidecar from file paths.
 ///
 /// Args:
@@ -220,6 +267,7 @@ fn validate_files(sidecar_path: &str, media_path: &str) -> PyResult<PyValidation
 fn signedshot(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyValidationResult>()?;
     m.add_function(wrap_pyfunction!(validate, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_with_jwks, m)?)?;
     m.add_function(wrap_pyfunction!(validate_files, m)?)?;
     Ok(())
 }
