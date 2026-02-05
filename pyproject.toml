@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "signedshot"
 version = "0.1.4"
 description = "Validator for SignedShot media authenticity proofs"
-readme = "README.md"
+readme = "python/README.md"
 license = { text = "MIT" }
 requires-python = ">=3.8"
 classifiers = [
