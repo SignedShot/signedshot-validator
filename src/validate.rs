@@ -29,6 +29,8 @@ pub struct CaptureTrustResult {
     pub capture_id: String,
     /// Attestation method (sandbox, app_check, app_attest)
     pub method: String,
+    /// App ID from attestation (e.g., bundle ID), if available
+    pub app_id: Option<String>,
     /// Unix timestamp when the JWT was issued
     pub issued_at: i64,
     /// Key ID used to sign the JWT
@@ -47,7 +49,8 @@ impl CaptureTrustResult {
             publisher_id: claims.publisher_id.clone(),
             device_id: claims.device_id.clone(),
             capture_id: claims.capture_id.clone(),
-            method: claims.method.clone(),
+            method: claims.attestation.method.clone(),
+            app_id: claims.attestation.app_id.clone(),
             issued_at: claims.iat,
             key_id,
         }
@@ -257,6 +260,7 @@ mod tests {
                 device_id: "dev-456".to_string(),
                 capture_id: "cap-789".to_string(),
                 method: "sandbox".to_string(),
+                app_id: None,
                 issued_at: 1705312200,
                 key_id: Some("key-1".to_string()),
             },
@@ -289,6 +293,7 @@ mod tests {
                 device_id: "dev-456".to_string(),
                 capture_id: "cap-789".to_string(),
                 method: "sandbox".to_string(),
+                app_id: None,
                 issued_at: 1705312200,
                 key_id: None,
             },

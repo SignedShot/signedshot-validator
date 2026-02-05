@@ -151,6 +151,9 @@ fn validate_command(sidecar_path: &Path, media_path: &Path, json_output: bool) -
     println!("  Publisher ID: {}", result.capture_trust.publisher_id);
     println!("  Device ID:    {}", result.capture_trust.device_id);
     println!("  Method:       {}", result.capture_trust.method);
+    if let Some(ref app_id) = result.capture_trust.app_id {
+        println!("  App ID:       {}", app_id);
+    }
     println!("  Issued At:    {}", result.capture_trust.issued_at);
     println!("  Key ID:       {}", kid);
 

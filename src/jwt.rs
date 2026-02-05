@@ -27,6 +27,16 @@ pub struct JwtHeader {
     pub kid: Option<String>,
 }
 
+/// Attestation information from the JWT
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Attestation {
+    /// Attestation method (sandbox, app_check, app_attest)
+    pub method: String,
+    /// App ID from attestation (e.g., bundle ID), if available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CaptureTrustClaims {
     pub iss: String,
@@ -36,7 +46,7 @@ pub struct CaptureTrustClaims {
     pub capture_id: String,
     pub publisher_id: String,
     pub device_id: String,
-    pub method: String,
+    pub attestation: Attestation,
 }
 
 #[derive(Debug, Clone)]
@@ -97,10 +107,10 @@ fn validate_claims(claims: &CaptureTrustClaims) -> Result<()> {
     }
 
     let valid_methods = ["sandbox", "app_check", "app_attest"];
-    if !valid_methods.contains(&claims.method.as_str()) {
+    if !valid_methods.contains(&claims.attestation.method.as_str()) {
         return Err(ValidationError::InvalidJwt(format!(
-            "Invalid method '{}', expected one of: {:?}",
-            claims.method, valid_methods
+            "Invalid attestation method '{}', expected one of: {:?}",
+            claims.attestation.method, valid_methods
         )));
     }
 
@@ -179,19 +189,34 @@ mod tests {
     #[test]
     fn parse_valid_jwt() {
         let header = r#"{"alg":"ES256","typ":"JWT","kid":"test-key"}"#;
-        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","method":"sandbox"}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"}}"#;
         let token = make_jwt(header, payload);
 
         let parsed = parse_jwt(&token).unwrap();
         assert_eq!(parsed.header.alg, "ES256");
         assert_eq!(parsed.claims.capture_id, "123");
-        assert_eq!(parsed.claims.method, "sandbox");
+        assert_eq!(parsed.claims.attestation.method, "sandbox");
+        assert_eq!(parsed.claims.attestation.app_id, None);
+    }
+
+    #[test]
+    fn parse_jwt_with_app_id() {
+        let header = r#"{"alg":"ES256","typ":"JWT","kid":"test-key"}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"app_check","app_id":"io.foo.bar"}}"#;
+        let token = make_jwt(header, payload);
+
+        let parsed = parse_jwt(&token).unwrap();
+        assert_eq!(parsed.claims.attestation.method, "app_check");
+        assert_eq!(
+            parsed.claims.attestation.app_id,
+            Some("io.foo.bar".to_string())
+        );
     }
 
     #[test]
     fn reject_invalid_algorithm() {
         let header = r#"{"alg":"HS256","typ":"JWT"}"#;
-        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","method":"sandbox"}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"}}"#;
         let token = make_jwt(header, payload);
 
         let result = parse_jwt(&token);
@@ -201,7 +226,7 @@ mod tests {
     #[test]
     fn reject_invalid_audience() {
         let header = r#"{"alg":"ES256","typ":"JWT"}"#;
-        let payload = r#"{"iss":"https://example.com","aud":"wrong","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","method":"sandbox"}"#;
+        let payload = r#"{"iss":"https://example.com","aud":"wrong","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"}}"#;
         let token = make_jwt(header, payload);
 
         let result = parse_jwt(&token);
@@ -211,7 +236,7 @@ mod tests {
     #[test]
     fn reject_invalid_method() {
         let header = r#"{"alg":"ES256","typ":"JWT"}"#;
-        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","method":"invalid"}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"invalid"}}"#;
         let token = make_jwt(header, payload);
 
         let result = parse_jwt(&token);
