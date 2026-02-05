@@ -35,6 +35,7 @@ impl PyValidationResult {
         dict.set_item("device_id", &self.inner.capture_trust.device_id)?;
         dict.set_item("capture_id", &self.inner.capture_trust.capture_id)?;
         dict.set_item("method", &self.inner.capture_trust.method)?;
+        dict.set_item("app_id", &self.inner.capture_trust.app_id)?;
         dict.set_item("issued_at", self.inner.capture_trust.issued_at)?;
         dict.set_item("key_id", &self.inner.capture_trust.key_id)?;
         Ok(dict)
