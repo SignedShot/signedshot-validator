@@ -3,6 +3,7 @@
 Verify SignedShot media authenticity proofs. Available as a Rust CLI and Python library.
 
 [![PyPI](https://img.shields.io/pypi/v/signedshot)](https://pypi.org/project/signedshot/)
+[![crates.io](https://img.shields.io/crates/v/signedshot-validator)](https://crates.io/crates/signedshot-validator)
 [![CI](https://github.com/SignedShot/signedshot-validator/actions/workflows/ci.yml/badge.svg)](https://github.com/SignedShot/signedshot-validator/actions/workflows/ci.yml)
 
 ## Overview
