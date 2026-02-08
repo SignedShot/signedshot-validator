@@ -84,6 +84,16 @@ fn validate_command(sidecar_path: &Path, media_path: &Path, json_output: bool) -
             s
         }
         Err(e) => {
+            let err_msg = format!("{}", e);
+            if err_msg.contains("valid UTF-8") || err_msg.contains("expected value") {
+                let ext = sidecar_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+                if matches!(ext, "jpg" | "jpeg" | "png" | "heic" | "heif" | "mp4" | "mov") {
+                    eprintln!("[FAILED] The sidecar path appears to be a media file, not a JSON sidecar.");
+                    eprintln!("         Did you swap the arguments?");
+                    eprintln!("         Usage: signedshot validate <sidecar.json> <media>");
+                    return Err(anyhow::anyhow!("Arguments appear to be swapped: sidecar path '{}' looks like a media file", sidecar_path.display()));
+                }
+            }
             println!("[FAILED] Sidecar parsing: {}", e);
             return Err(e).context("Failed to parse sidecar");
         }
