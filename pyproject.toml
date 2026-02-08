@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "signedshot"
-version = "0.1.7"
+version = "0.1.8"
 description = "Validator for SignedShot media authenticity proofs"
 readme = "python/README.md"
 license = { text = "MIT" }
