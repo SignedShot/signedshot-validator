@@ -254,4 +254,121 @@ mod tests {
         let result = parse_jwt("!!!.@@@.###");
         assert!(matches!(result, Err(ValidationError::JwtDecodeError(_))));
     }
+
+    /// Test that JWT signature verification works end-to-end with jsonwebtoken.
+    /// This exercises jsonwebtoken::decode() which requires a CryptoProvider.
+    /// The jsonwebtoken 9→10 upgrade broke this; this test prevents regressions.
+    #[test]
+    fn verify_signature_with_valid_jwt() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+
+        // Hardcoded EC P-256 test key (PKCS8 PEM format)
+        let private_pem = concat!(
+            "-----BEGIN PRIVATE KEY-----\n",
+            "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg1KUid6KzUOny1siR\n",
+            "Pl1OMJgN161C1yXZ7/8KCXRtulmhRANCAAQJ5T/BXZMxSXgh67vjlgAnA1b9mr2B\n",
+            "tGYEnljojfpGAa5tqRxPFTZ2IP8IZDqKSX9j7n0GLPHE3QuLRV3MEAXn\n",
+            "-----END PRIVATE KEY-----\n",
+        );
+
+        // Public key x,y coordinates (base64url, no padding)
+        let jwks = Jwks {
+            keys: vec![Jwk {
+                kty: "EC".to_string(),
+                crv: "P-256".to_string(),
+                x: "CeU_wV2TMUl4Ieu745YAJwNW_Zq9gbRmBJ5Y6I36RgE".to_string(),
+                y: "rm2pHE8VNnYg_whkOopJf2PufQYs8cTdC4tFXcwQBec".to_string(),
+                kid: "test-key-1".to_string(),
+            }],
+        };
+
+        // Sign a JWT with valid claims
+        let claims = CaptureTrustClaims {
+            iss: "https://dev-api.signedshot.io".to_string(),
+            aud: "signedshot".to_string(),
+            sub: "capture-service".to_string(),
+            iat: 1705312200,
+            capture_id: "test-capture-123".to_string(),
+            publisher_id: "test-publisher-456".to_string(),
+            device_id: "test-device-789".to_string(),
+            attestation: Attestation {
+                method: "sandbox".to_string(),
+                app_id: None,
+            },
+        };
+
+        let mut header = Header::new(Algorithm::ES256);
+        header.kid = Some("test-key-1".to_string());
+
+        let encoding_key = EncodingKey::from_ec_pem(private_pem.as_bytes()).unwrap();
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+
+        // This calls jsonwebtoken::decode() — would panic without CryptoProvider
+        let result = verify_signature(&token, &jwks, "test-key-1");
+        assert!(result.is_ok(), "verify_signature failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn verify_signature_rejects_wrong_key() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+
+        // Hardcoded EC P-256 test key (PKCS8 PEM format)
+        let private_pem = concat!(
+            "-----BEGIN PRIVATE KEY-----\n",
+            "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg1KUid6KzUOny1siR\n",
+            "Pl1OMJgN161C1yXZ7/8KCXRtulmhRANCAAQJ5T/BXZMxSXgh67vjlgAnA1b9mr2B\n",
+            "tGYEnljojfpGAa5tqRxPFTZ2IP8IZDqKSX9j7n0GLPHE3QuLRV3MEAXn\n",
+            "-----END PRIVATE KEY-----\n",
+        );
+
+        // JWKS with a DIFFERENT public key (all zeros x,y — will fail verification)
+        let wrong_jwks = Jwks {
+            keys: vec![Jwk {
+                kty: "EC".to_string(),
+                crv: "P-256".to_string(),
+                x: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                y: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+                kid: "test-key-1".to_string(),
+            }],
+        };
+
+        let claims = CaptureTrustClaims {
+            iss: "https://dev-api.signedshot.io".to_string(),
+            aud: "signedshot".to_string(),
+            sub: "capture-service".to_string(),
+            iat: 1705312200,
+            capture_id: "test-capture-123".to_string(),
+            publisher_id: "test-publisher-456".to_string(),
+            device_id: "test-device-789".to_string(),
+            attestation: Attestation {
+                method: "sandbox".to_string(),
+                app_id: None,
+            },
+        };
+
+        let mut header = Header::new(Algorithm::ES256);
+        header.kid = Some("test-key-1".to_string());
+
+        let encoding_key = EncodingKey::from_ec_pem(private_pem.as_bytes()).unwrap();
+        let token = encode(&header, &claims, &encoding_key).unwrap();
+
+        let result = verify_signature(&token, &wrong_jwks, "test-key-1");
+        assert!(result.is_err(), "Should reject JWT signed with different key");
+    }
+
+    #[test]
+    fn verify_signature_rejects_missing_kid() {
+        let jwks = Jwks {
+            keys: vec![Jwk {
+                kty: "EC".to_string(),
+                crv: "P-256".to_string(),
+                x: "CeU_wV2TMUl4Ieu745YAJwNW_Zq9gbRmBJ5Y6I36RgE".to_string(),
+                y: "rm2pHE8VNnYg_whkOopJf2PufQYs8cTdC4tFXcwQBec".to_string(),
+                kid: "test-key-1".to_string(),
+            }],
+        };
+
+        let result = verify_signature("fake.jwt.token", &jwks, "nonexistent-kid");
+        assert!(matches!(result, Err(ValidationError::KeyNotFound(_))));
+    }
 }
