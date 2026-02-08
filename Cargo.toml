@@ -5,6 +5,12 @@ edition = "2021"
 description = "Validator for SignedShot media authenticity proofs"
 license = "MIT"
 repository = "https://github.com/SignedShot/signedshot-validator"
+homepage = "https://signedshot.io"
+documentation = "https://signedshot.io/docs"
+readme = "README.md"
+keywords = ["signedshot", "media-authenticity", "cryptography", "verification", "digital-signatures"]
+categories = ["cryptography", "authentication", "command-line-utilities", "multimedia::images"]
+exclude = ["*.jpg", "*.sidecar.json", "python/", "pyproject.toml"]
 
 [lib]
 name = "signedshot_validator"
