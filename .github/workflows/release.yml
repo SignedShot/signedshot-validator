@@ -3,16 +3,29 @@ name: Release
 on:
   push:
     branches: [main]
-    tags:
-      - 'v*'
-  pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  # Detect if this push is a release (version changed in Cargo.toml)
+  check-release:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    outputs:
+      is_release: ${{ steps.check.outputs.is_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Check if version changed
+        id: check
+        run: |
+          if git diff HEAD~1 -- Cargo.toml | grep -qE '^\+version = "'; then
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          fi
+
   # Build wheels for Linux x86_64
   linux-x86_64:
     runs-on: ubuntu-latest
@@ -118,12 +131,12 @@ jobs:
           name: wheels-sdist
           path: dist
 
-  # Publish to PyPI (only on tags)
+  # Publish to PyPI (only on release)
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [linux-x86_64, linux-aarch64, macos, windows, sdist]
+    needs: [check-release, linux-x86_64, linux-aarch64, macos, windows, sdist]
+    if: needs.check-release.outputs.is_release == 'true'
     environment:
       name: pypi
       url: https://pypi.org/p/signedshot
@@ -140,11 +153,12 @@ jobs:
         with:
           skip-existing: true
 
-  # Publish to crates.io (only on tags)
+  # Publish to crates.io (only on release)
   publish-crates:
     name: Publish to crates.io
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check-release]
+    if: needs.check-release.outputs.is_release == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -153,11 +167,11 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  # Publish to TestPyPI (on main branch push)
+  # Publish to TestPyPI (on push to main)
   publish-test:
     name: Publish to TestPyPI
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'push'
     needs: [linux-x86_64, linux-aarch64, macos, windows, sdist]
     environment:
       name: testpypi

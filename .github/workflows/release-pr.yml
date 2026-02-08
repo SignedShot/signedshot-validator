@@ -1,0 +1,54 @@
+name: Release PR
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Extract version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Update Cargo.toml version
+        run: sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' Cargo.toml
+
+      - name: Update pyproject.toml version
+        run: sed -i 's/^version = ".*"/version = "'"$VERSION"'"/' pyproject.toml
+
+      - name: Create release branch and PR
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b release/$VERSION
+          git add Cargo.toml pyproject.toml
+          git commit -m "chore: bump version to $VERSION"
+          git push origin release/$VERSION
+          gh pr create \
+            --title "release: v$VERSION" \
+            --body "$(cat <<EOF
+          ## Release v$VERSION
+
+          Automated version bump triggered by [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}).
+
+          ### Changes
+          - Cargo.toml version → $VERSION
+          - pyproject.toml version → $VERSION
+
+          ### After merge
+          PyPI and crates.io publish will trigger automatically.
+          EOF
+          )" \
+            --base main \
+            --head release/$VERSION
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
