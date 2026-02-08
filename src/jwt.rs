@@ -305,7 +305,11 @@ mod tests {
 
         // This calls jsonwebtoken::decode() — would panic without CryptoProvider
         let result = verify_signature(&token, &jwks, "test-key-1");
-        assert!(result.is_ok(), "verify_signature failed: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "verify_signature failed: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -353,7 +357,10 @@ mod tests {
         let token = encode(&header, &claims, &encoding_key).unwrap();
 
         let result = verify_signature(&token, &wrong_jwks, "test-key-1");
-        assert!(result.is_err(), "Should reject JWT signed with different key");
+        assert!(
+            result.is_err(),
+            "Should reject JWT signed with different key"
+        );
     }
 
     #[test]
