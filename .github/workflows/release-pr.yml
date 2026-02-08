@@ -28,7 +28,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Update Cargo.lock
-        run: cargo update -p signedshot-validator
+        run: cargo generate-lockfile
 
       - name: Create release branch and PR
         run: |
