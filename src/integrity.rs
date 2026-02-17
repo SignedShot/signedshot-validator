@@ -112,6 +112,28 @@ pub fn verify_capture_id_match(jwt_capture_id: &str, integrity: &MediaIntegrity)
     Ok(())
 }
 
+/// Verify that the JWT's device_public_key_fingerprint matches
+/// SHA-256(base64_decode(media_integrity.public_key)).
+pub fn verify_device_public_key_fingerprint(
+    jwt_fingerprint: &str,
+    integrity: &MediaIntegrity,
+) -> Result<()> {
+    let public_key_bytes = STANDARD
+        .decode(&integrity.public_key)
+        .map_err(|e| ValidationError::InvalidPublicKey(format!("Base64 decode failed: {}", e)))?;
+
+    let computed = hex::encode(Sha256::digest(&public_key_bytes));
+
+    if computed != jwt_fingerprint {
+        return Err(ValidationError::DevicePublicKeyFingerprintMismatch {
+            jwt_fingerprint: jwt_fingerprint.to_string(),
+            computed_fingerprint: computed,
+        });
+    }
+
+    Ok(())
+}
+
 /// Full media integrity verification
 ///
 /// This verifies:

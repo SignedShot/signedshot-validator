@@ -163,6 +163,12 @@ fn validate_command(sidecar_path: &Path, media_path: &Path, json_output: bool) -
         println!("[FAILED] Capture ID mismatch");
     }
 
+    if result.media_integrity.fingerprint_match {
+        println!("[OK] Device public key fingerprint verified");
+    } else {
+        println!("[FAILED] Device public key fingerprint mismatch");
+    }
+
     let integrity = sidecar.media_integrity();
 
     println!();

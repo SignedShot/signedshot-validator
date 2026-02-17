@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use crate::error::{Result, ValidationError};
-use crate::integrity::{verify_capture_id_match, verify_signature as verify_media_signature};
+use crate::integrity::{
+    verify_capture_id_match, verify_device_public_key_fingerprint,
+    verify_signature as verify_media_signature,
+};
 use crate::jwt::{
     fetch_jwks, parse_jwks_json, parse_jwt, verify_signature as verify_jwt_signature,
     CaptureTrustClaims, Jwks,
@@ -35,6 +38,8 @@ pub struct CaptureTrustResult {
     pub issued_at: i64,
     /// Key ID used to sign the JWT
     pub key_id: Option<String>,
+    /// SHA-256 hex of the device's content-signing public key
+    pub device_public_key_fingerprint: String,
 }
 
 impl CaptureTrustResult {
@@ -53,6 +58,7 @@ impl CaptureTrustResult {
             app_id: claims.attestation.app_id.clone(),
             issued_at: claims.iat,
             key_id,
+            device_public_key_fingerprint: claims.device_public_key_fingerprint.clone(),
         }
     }
 }
@@ -66,6 +72,8 @@ pub struct MediaIntegrityResult {
     pub signature_valid: bool,
     /// Whether the capture_id matches between JWT and media_integrity
     pub capture_id_match: bool,
+    /// Whether the device public key fingerprint matches
+    pub fingerprint_match: bool,
     /// The content hash from the sidecar
     pub content_hash: String,
     /// The capture ID from media_integrity
@@ -203,9 +211,26 @@ fn validate_sidecar_and_media(
         }
     }
 
+    // Cross-layer binding: verify device public key fingerprint
+    let mut fingerprint_match = false;
+    match verify_device_public_key_fingerprint(
+        &parsed.claims.device_public_key_fingerprint,
+        integrity,
+    ) {
+        Ok(()) => fingerprint_match = true,
+        Err(e) => {
+            if error_message.is_none() {
+                error_message = Some(format!("Device public key fingerprint mismatch: {}", e));
+            }
+        }
+    }
+
     // Overall validation passes only if all checks pass
-    let valid =
-        jwt_signature_valid && content_hash_valid && media_signature_valid && capture_id_match;
+    let valid = jwt_signature_valid
+        && content_hash_valid
+        && media_signature_valid
+        && capture_id_match
+        && fingerprint_match;
 
     Ok(ValidationResult {
         valid,
@@ -215,6 +240,7 @@ fn validate_sidecar_and_media(
             content_hash_valid,
             signature_valid: media_signature_valid,
             capture_id_match,
+            fingerprint_match,
             content_hash: integrity.content_hash.clone(),
             capture_id: integrity.capture_id.clone(),
             captured_at: integrity.captured_at.clone(),
@@ -263,11 +289,13 @@ mod tests {
                 app_id: None,
                 issued_at: 1705312200,
                 key_id: Some("key-1".to_string()),
+                device_public_key_fingerprint: "a".repeat(64),
             },
             media_integrity: MediaIntegrityResult {
                 content_hash_valid: true,
                 signature_valid: true,
                 capture_id_match: true,
+                fingerprint_match: true,
                 content_hash: "abc123".to_string(),
                 capture_id: "cap-789".to_string(),
                 captured_at: "2026-01-26T15:30:00Z".to_string(),
@@ -296,11 +324,13 @@ mod tests {
                 app_id: None,
                 issued_at: 1705312200,
                 key_id: None,
+                device_public_key_fingerprint: "a".repeat(64),
             },
             media_integrity: MediaIntegrityResult {
                 content_hash_valid: true,
                 signature_valid: true,
                 capture_id_match: true,
+                fingerprint_match: true,
                 content_hash: "abc123".to_string(),
                 capture_id: "cap-789".to_string(),
                 captured_at: "2026-01-26T15:30:00Z".to_string(),
