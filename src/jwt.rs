@@ -47,6 +47,7 @@ pub struct CaptureTrustClaims {
     pub publisher_id: String,
     pub device_id: String,
     pub attestation: Attestation,
+    pub device_public_key_fingerprint: String,
 }
 
 #[derive(Debug, Clone)]
@@ -189,7 +190,7 @@ mod tests {
     #[test]
     fn parse_valid_jwt() {
         let header = r#"{"alg":"ES256","typ":"JWT","kid":"test-key"}"#;
-        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"}}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"},"device_public_key_fingerprint":"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}"#;
         let token = make_jwt(header, payload);
 
         let parsed = parse_jwt(&token).unwrap();
@@ -202,7 +203,7 @@ mod tests {
     #[test]
     fn parse_jwt_with_app_id() {
         let header = r#"{"alg":"ES256","typ":"JWT","kid":"test-key"}"#;
-        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"app_check","app_id":"io.foo.bar"}}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"app_check","app_id":"io.foo.bar"},"device_public_key_fingerprint":"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}"#;
         let token = make_jwt(header, payload);
 
         let parsed = parse_jwt(&token).unwrap();
@@ -216,7 +217,7 @@ mod tests {
     #[test]
     fn reject_invalid_algorithm() {
         let header = r#"{"alg":"HS256","typ":"JWT"}"#;
-        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"}}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"},"device_public_key_fingerprint":"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}"#;
         let token = make_jwt(header, payload);
 
         let result = parse_jwt(&token);
@@ -226,7 +227,7 @@ mod tests {
     #[test]
     fn reject_invalid_audience() {
         let header = r#"{"alg":"ES256","typ":"JWT"}"#;
-        let payload = r#"{"iss":"https://example.com","aud":"wrong","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"}}"#;
+        let payload = r#"{"iss":"https://example.com","aud":"wrong","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"sandbox"},"device_public_key_fingerprint":"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}"#;
         let token = make_jwt(header, payload);
 
         let result = parse_jwt(&token);
@@ -236,7 +237,7 @@ mod tests {
     #[test]
     fn reject_invalid_method() {
         let header = r#"{"alg":"ES256","typ":"JWT"}"#;
-        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"invalid"}}"#;
+        let payload = r#"{"iss":"https://dev-api.signedshot.io","aud":"signedshot","sub":"capture-service","iat":1705312200,"capture_id":"123","publisher_id":"456","device_id":"789","attestation":{"method":"invalid"},"device_public_key_fingerprint":"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"}"#;
         let token = make_jwt(header, payload);
 
         let result = parse_jwt(&token);
@@ -295,6 +296,7 @@ mod tests {
                 method: "sandbox".to_string(),
                 app_id: None,
             },
+            device_public_key_fingerprint: "a".repeat(64),
         };
 
         let mut header = Header::new(Algorithm::ES256);
@@ -348,6 +350,7 @@ mod tests {
                 method: "sandbox".to_string(),
                 app_id: None,
             },
+            device_public_key_fingerprint: "a".repeat(64),
         };
 
         let mut header = Header::new(Algorithm::ES256);

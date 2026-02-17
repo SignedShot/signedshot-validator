@@ -50,6 +50,12 @@ pub enum ValidationError {
 
     #[error("Invalid public key: {0}")]
     InvalidPublicKey(String),
+
+    #[error("Device public key fingerprint mismatch: JWT has {jwt_fingerprint}, computed {computed_fingerprint}")]
+    DevicePublicKeyFingerprintMismatch {
+        jwt_fingerprint: String,
+        computed_fingerprint: String,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, ValidationError>;

@@ -38,6 +38,10 @@ impl PyValidationResult {
         dict.set_item("app_id", &self.inner.capture_trust.app_id)?;
         dict.set_item("issued_at", self.inner.capture_trust.issued_at)?;
         dict.set_item("key_id", &self.inner.capture_trust.key_id)?;
+        dict.set_item(
+            "device_public_key_fingerprint",
+            &self.inner.capture_trust.device_public_key_fingerprint,
+        )?;
         Ok(dict)
     }
 
@@ -56,6 +60,10 @@ impl PyValidationResult {
         dict.set_item(
             "capture_id_match",
             self.inner.media_integrity.capture_id_match,
+        )?;
+        dict.set_item(
+            "fingerprint_match",
+            self.inner.media_integrity.fingerprint_match,
         )?;
         dict.set_item("content_hash", &self.inner.media_integrity.content_hash)?;
         dict.set_item("capture_id", &self.inner.media_integrity.capture_id)?;
