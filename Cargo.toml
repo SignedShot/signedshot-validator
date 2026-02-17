@@ -1,6 +1,6 @@
 [package]
 name = "signedshot-validator"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 description = "Validator for SignedShot media authenticity proofs"
 license = "MIT"
